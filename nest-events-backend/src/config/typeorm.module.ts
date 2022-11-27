@@ -2,6 +2,8 @@ import { ConfigService } from '@nestjs/config';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { Event } from 'src/events/entity/event.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -14,9 +16,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
         autoLoadEntities: true,
         synchronize: true,
         type: 'mysql',
+        entities: [Event]
       }),
       inject: [ConfigService],
-    }),
+    })
   ],
   controllers: [],
   providers: [],

@@ -1,56 +1,104 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, UsePipes, ValidationPipe } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, MoreThan, Like } from 'typeorm';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { Event } from './entity/event.entity';
 
 @Controller('/events')
 export class EventsController {
-  constructor() {}
+  constructor(
+    @InjectRepository(Event)
+    private readonly repository: Repository<Event>
+  ) {}
 
-  private events: Event[] = [];
+
 
   @Get()
-  findAll(): Event[] {
-    return this.events;
+  async findAll() {
+    try {
+      return await this.repository.find();
+    } catch(e) {
+      return 'No results';
+    }
+  }
+
+  // @Get('/practice')
+  // async practice() {
+  //   return await this.repository.find({
+  //     where:{id : MoreThan(3)}
+  //   });
+  // }
+
+  @Get('/practice')
+  async practice() {
+    return await this.repository.find({
+      select: ['id', 'name'],
+      where: [
+        {id : MoreThan(3), when: MoreThan(new Date('2021-02-12T13:00:00'))},
+        {description: Like('%meet%')}
+      ],
+      take: 2,
+      order: {
+        id: 'DESC'
+      }
+    });
   }
 
   @Get('/:id')
-  findOne(@Param('id') id: string) {
-    const found = this.events.find(e => e.id === parseInt(id));
-    return found || 'No result';
+  async findOne(@Param('id', new ParseIntPipe({errorHttpStatusCode: HttpStatus.NOT_ACCEPTABLE})) id : number) {
+    try {
+      return await this.repository.findOneBy({id});
+    } catch(e) {
+      return 'No result';
+    }
   }
 
+  
+  @UsePipes()
   @Post()
-  create(@Body() data: CreateEventDto) {
-
+  async create(@Body(new ValidationPipe({groups: ['create']})) data: CreateEventDto) {
     const date = new Date(data.when);
-
     if(!date || date.toString() === 'Invalid Date' ) return 'Invalid date format should be in (yyyy-mm-dd)';
 
-    const event: Event = {
-      ...data,
-      when: new Date(data.when),
-      id: this.events.length + 1
-    };
-    this.events.push(event);
-    return event;
+    try {
+      return await this.repository.save({
+        ...data,
+        when: new Date(data.when),
+      });
+    } catch(e) {
+      return 'Could not create';
+    }
+    
   }
 
+  @UsePipes()
   @Patch('/:id')
-  update(@Param('id') id: string, @Body() data: UpdateEventDto) {
-    const index = this.events.findIndex(e => e.id === parseInt(id));
-    this.events[index] = {
-      ...this.events[index],
-      ...data,
-      when: data.when ? new Date(data.when) : this.events[index].when
-    };
-    return this.events[index];
+  async update(
+    @Param('id') id, 
+    @Body(new ValidationPipe({groups: ['update']})) data: UpdateEventDto) {
+
+    try {
+      const found = await this.repository.findOneBy({id});
+      return await this.repository.save({
+        ...found,
+        ...data,
+        when: data.when ? new Date(data.when) : found.when
+      });
+    } catch(e) {
+      return 'Could not update';
+    }
   }
 
   @Delete('/:id')
   @HttpCode(204)
-  delete(@Param('id') id: string) {
-    this.events = this.events.filter(e => e.id !== parseInt(id));
+  async remove(@Param('id') id) {
+    try {
+      const found = await this.repository.findOneBy({id});
+      await this.repository.delete(found);
+    } catch(e) {
+      return 'Could not delete';
+    }
   }
 }
 
